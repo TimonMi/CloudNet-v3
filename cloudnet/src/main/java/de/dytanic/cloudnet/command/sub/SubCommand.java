@@ -2,7 +2,6 @@ package de.dytanic.cloudnet.command.sub;
 
 import de.dytanic.cloudnet.command.ICommandSender;
 import de.dytanic.cloudnet.common.Properties;
-import de.dytanic.cloudnet.common.collection.Pair;
 import de.dytanic.cloudnet.console.animation.questionlist.QuestionAnswerType;
 
 import java.util.*;
@@ -159,9 +158,8 @@ public abstract class SubCommand implements SubCommandExecutor {
     }
 
     //the returned pair contains the message of the first non-matching argument and the amount of non-matching, static arguments
-    public Pair<String, Integer> getInvalidArgumentMessage(String[] args) {
+    public String getInvalidArgumentMessage(String[] args) {
         String resultMessage = null;
-        int nonMatched = 0;
         for (int i = 0; i < args.length; i++) {
             if (this.propertiesEnabled && i >= this.getBeginOfProperties()) {
                 break;
@@ -172,10 +170,6 @@ public abstract class SubCommand implements SubCommandExecutor {
                 QuestionAnswerType<?> type = this.requiredArguments[i];
 
                 if (!type.isValidInput(args[i])) {
-                    if (type instanceof QuestionAnswerTypeStaticString || type instanceof QuestionAnswerTypeStaticStringArray) {
-                        ++nonMatched;
-                    }
-
                     String invalidMessage = type.getInvalidInputMessage(args[i]);
                     if (invalidMessage != null && resultMessage == null) {
                         resultMessage = invalidMessage;
@@ -188,10 +182,6 @@ public abstract class SubCommand implements SubCommandExecutor {
                 QuestionAnswerType<?> type = this.requiredArguments[this.requiredArguments.length - 1];
 
                 if (!type.isValidInput(currentValue)) {
-                    if (type instanceof QuestionAnswerTypeStaticString || type instanceof QuestionAnswerTypeStaticStringArray) {
-                        ++nonMatched;
-                    }
-
                     String invalidMessage = type.getInvalidInputMessage(currentValue);
                     if (invalidMessage != null && resultMessage == null) {
                         resultMessage = invalidMessage;
@@ -202,7 +192,7 @@ public abstract class SubCommand implements SubCommandExecutor {
 
             }
         }
-        return resultMessage != null ? new Pair<>(resultMessage, nonMatched) : null;
+        return resultMessage;
     }
 
     public SubCommandArgument<?>[] parseArgs(String[] args) {

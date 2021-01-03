@@ -117,37 +117,40 @@ public class SubCommandHandler extends Command implements ITabCompleter {
     private SubCommandResult getResult(String[] args) {
         Optional<Pair<SubCommand, String>> commandAndError = this.subCommands.stream()
                 .filter(subCommand -> subCommand.checkValidArgsLength(args.length))
-                .filter(subCommand -> {
-                    QuestionAnswerType<?>[] requiredArguments = subCommand.getRequiredArguments();
-                    List<Pair<Integer, QuestionAnswerType<?>>> checkLater = new ArrayList<>();
-                    for (int i = 0; i < requiredArguments.length; i++) { // Firstly filter out the commands using the static arguments
-                        QuestionAnswerType<?> type = requiredArguments[i];
-                        if (type instanceof QuestionAnswerTypeStaticString
-                                || type instanceof QuestionAnswerTypeStaticStringArray
-                                || type.getClass().getPackage().equals(QuestionAnswerTypeBoolean.class.getPackage())) {
-                            if (!type.isValidInput(args[i])) {
-                                return false;
-                            } else {
-                                checkLater.add(new Pair<>(i, type));
-                            }
-                        }
-                    }
-                    for (Pair<Integer, QuestionAnswerType<?>> pair : checkLater) { //Then filter using the remaining variables
-                        if (!pair.getSecond().isValidInput(args[pair.getFirst()])) {
-                            return false;
-                        }
-                    }
-                    return true;
-                }).map(subCommand -> {
-                    Pair<String, Integer> error = subCommand.getInvalidArgumentMessage(args);
+                .filter(subCommand -> validateArguments(args, subCommand))
+                .map(subCommand -> {
+                    String error = subCommand.getInvalidArgumentMessage(args);
                     if (error == null) {
                         return new Pair<>(subCommand, (String) null);
                     } else {
-                        return new Pair<>(subCommand, error.getFirst());
+                        return new Pair<>(subCommand, error);
                     }
                 }).findFirst();
         if (!commandAndError.isPresent()) return new SubCommandResult(null, null);
         return new SubCommandResult(commandAndError.get().getFirst(), commandAndError.get().getSecond());
+    }
+
+    private boolean validateArguments(String[] args, SubCommand subCommand) {
+        QuestionAnswerType<?>[] requiredArguments = subCommand.getRequiredArguments();
+        List<Pair<Integer, QuestionAnswerType<?>>> checkLater = new ArrayList<>();
+        for (int i = 0; i < requiredArguments.length; i++) { // Firstly filter out the commands using the static arguments
+            QuestionAnswerType<?> type = requiredArguments[i];
+            if (type instanceof QuestionAnswerTypeStaticString
+                    || type instanceof QuestionAnswerTypeStaticStringArray
+                    || type.getClass().getPackage().equals(QuestionAnswerTypeBoolean.class.getPackage())) {
+                if (!type.isValidInput(args[i])) {
+                    return false;
+                } else {
+                    checkLater.add(new Pair<>(i, type));
+                }
+            }
+        }
+        for (Pair<Integer, QuestionAnswerType<?>> pair : checkLater) { //Then filter using the remaining variables
+            if (!pair.getSecond().isValidInput(args[pair.getFirst()])) {
+                return false;
+            }
+        }
+        return true;
     }
 
     protected void sendHelp(ICommandSender sender) {
