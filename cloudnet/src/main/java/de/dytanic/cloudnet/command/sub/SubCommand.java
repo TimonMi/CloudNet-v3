@@ -221,9 +221,6 @@ public abstract class SubCommand implements SubCommandExecutor {
             }
             if (this.requiredArguments.length > i) {
                 QuestionAnswerType<?> type = this.requiredArguments[i];
-                if (!type.isValidInput(args[i])) {
-                    return null;
-                }
 
                 result.add(new SubCommandArgument(type, type.parse(args[i])));
             } else {

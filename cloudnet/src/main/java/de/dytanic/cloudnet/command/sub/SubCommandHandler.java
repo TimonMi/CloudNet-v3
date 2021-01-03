@@ -8,6 +8,9 @@ import de.dytanic.cloudnet.command.ITabCompleter;
 import de.dytanic.cloudnet.common.Properties;
 import de.dytanic.cloudnet.common.collection.Pair;
 import de.dytanic.cloudnet.common.language.LanguageManager;
+import de.dytanic.cloudnet.console.animation.questionlist.QuestionAnswerType;
+import de.dytanic.cloudnet.console.animation.questionlist.answer.QuestionAnswerTypeBoolean;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -66,33 +69,24 @@ public class SubCommandHandler extends Command implements ITabCompleter {
 
     @Override
     public void execute(ICommandSender sender, String command, String[] args, String commandLine, Properties properties) {
-        Optional<String> optionalInvalidMessage = this.subCommands.stream()
-                .map(subCommand -> subCommand.getInvalidArgumentMessage(args))
-                .filter(Objects::nonNull)
-                .filter(pair -> pair.getSecond() == 0) // all static values must match
-                .findFirst()
-                .map(Pair::getFirst);
-
-        Optional<Pair<SubCommand, SubCommandArgument<?>[]>> optionalSubCommand = this.subCommands.stream()
-                .map(subCommand -> new Pair<>(subCommand, subCommand.parseArgs(args)))
-                .filter(pair -> pair.getSecond() != null && pair.getSecond().length != 0)
-                .findFirst();
-
-        if (optionalInvalidMessage.isPresent() && !optionalSubCommand.isPresent()) {
-            sender.sendMessage(optionalInvalidMessage.get());
-            return;
-        }
-
-        if (!optionalSubCommand.isPresent()) {
+        SubCommandResult result = getResult(args);
+        if (!result.getCommand().isPresent()) {
             this.sendHelp(sender);
             return;
         }
+        SubCommand subCommand = result.getCommand().get();
+        Optional<String> invalidMessage = result.getErrorMessage();
 
+        if (invalidMessage.isPresent()) {
+            sender.sendMessage(invalidMessage.get());
+            return;
+        }
 
-        Pair<SubCommand, SubCommandArgument<?>[]> subCommandPair = optionalSubCommand.get();
-
-        SubCommand subCommand = subCommandPair.getFirst();
-        SubCommandArgument<?>[] parsedArgs = subCommandPair.getSecond();
+        SubCommandArgument<?>[] parsedArgs = subCommand.parseArgs(args);
+        if (parsedArgs.length == 0) {
+            this.sendHelp(sender);
+            return;
+        }
 
         if (subCommand.isOnlyConsole() && !(sender instanceof ConsoleCommandSender)) {
             sender.sendMessage(LanguageManager.getMessage("command-sub-only-console"));
@@ -117,6 +111,43 @@ public class SubCommandHandler extends Command implements ITabCompleter {
                     commandLine, subCommand.parseProperties(args), new HashMap<>()
             );
         }
+    }
+
+    @NotNull
+    private SubCommandResult getResult(String[] args) {
+        Optional<Pair<SubCommand, String>> commandAndError = this.subCommands.stream()
+                .filter(subCommand -> subCommand.checkValidArgsLength(args.length))
+                .filter(subCommand -> {
+                    QuestionAnswerType<?>[] requiredArguments = subCommand.getRequiredArguments();
+                    List<Pair<Integer, QuestionAnswerType<?>>> checkLater = new ArrayList<>();
+                    for (int i = 0; i < requiredArguments.length; i++) { // Firstly filter out the commands using the static arguments
+                        QuestionAnswerType<?> type = requiredArguments[i];
+                        if (type instanceof QuestionAnswerTypeStaticString
+                                || type instanceof QuestionAnswerTypeStaticStringArray
+                                || type.getClass().getPackage().equals(QuestionAnswerTypeBoolean.class.getPackage())) {
+                            if (!type.isValidInput(args[i])) {
+                                return false;
+                            } else {
+                                checkLater.add(new Pair<>(i, type));
+                            }
+                        }
+                    }
+                    for (Pair<Integer, QuestionAnswerType<?>> pair : checkLater) { //Then filter using the remaining variables
+                        if (!pair.getSecond().isValidInput(args[pair.getFirst()])) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }).map(subCommand -> {
+                    Pair<String, Integer> error = subCommand.getInvalidArgumentMessage(args);
+                    if (error == null) {
+                        return new Pair<>(subCommand, (String) null);
+                    } else {
+                        return new Pair<>(subCommand, error.getFirst());
+                    }
+                }).findFirst();
+        if (!commandAndError.isPresent()) return new SubCommandResult(null, null);
+        return new SubCommandResult(commandAndError.get().getFirst(), commandAndError.get().getSecond());
     }
 
     protected void sendHelp(ICommandSender sender) {
